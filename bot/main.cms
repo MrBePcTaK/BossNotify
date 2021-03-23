@@ -1,0 +1,115 @@
+﻿#name "BossNotify"
+
+LOGCLEAR ()
+LOGSHOW (1)
+WNDSIZE (WNDFIND ("Лог", 1) , 650, 450)
+
+//kor 3a 5 min 
+//slaim 3a 5 
+//matka 3a 5 
+//korova 20 
+//yeti 3a 5 
+//levik 3a 20 
+//riba gast po 20 toj
+
+PRINT("Script started")
+
+IF(FEXISTS ("config.ini"))
+    PRINT("Import config file...")
+ELSE
+    PRINTC("Config file not found", COLORGEN (255, 0, 0))
+    HALT()
+END_IF
+
+$latestpath = INIREAD("config.ini", "lastestpath")
+$bosses = INIREAD("config.ini", "bosses")
+$cooldowns = INIREAD("config.ini", "cooldowns")
+$needcdnotify = "5,5,5,20,5,20,20,20"
+
+IF(FEXISTS ($latestpath))
+    PRINT("Import successful")
+ELSE
+    PRINTC("Import failed", COLORGEN (255, 0, 0))
+    PRINT($latestpath, " not found")
+    HALT()
+END_IF
+
+$bossesconv = $bosses
+
+TFREADARR ("UTF-8", $utf)
+TFREADARR ("Windows-1251", $win)
+
+FOR($i = 0, $i < ARRSIZE($utf))
+    $pos = -1
+    
+    WHILE($pos ! 0)
+        
+        $bossesconv = STRREPLACE($bossesconv, $utf[$i], $win[$i])
+        $pos = STRPOS ($bossesconv, $utf[$i], 1, 1) 
+        
+    END_CYC
+    
+END_CYC
+
+STRSEPARATE ($bosses, ",", $bossarr)
+STRSEPARATE ($bossesconv, ",", $bossconvarr)
+STRSEPARATE ($cooldowns, ",", $cooldownarr)
+STRSEPARATE ($needcdnotify, ",", $needcdnarr)
+
+IF(ARRSIZE($bossarr) > ARRSIZE($cooldownarr))
+    PRINTC("Boss name's more than cooldown's", COLORGEN (255, 0, 0))
+    HALT()
+ELSE
+    IF(ARRSIZE($bossarr) < ARRSIZE($cooldownarr))
+        PRINTC("Cooldown's more than boss name's", COLORGEN (255, 0, 0))
+        HALT()
+    END_IF
+END_IF
+
+FOR($i = 0, $i < ARRSIZE($bossarr))
+    PRINT($bossconvarr[$i], " - ", $cooldownarr[$i], " min")
+END_CYC
+
+$latestcount = TFCOUNT ($latestpath)
+TFREADARR ($latestpath, $latestarr)
+PRINT("Current in file latest.log lines ", $latestcount)
+PRINT()
+
+FOR($i = 0, $i < ARRSIZE($bossarr))
+    
+    $j = $latestcount - 1
+    $break = 0
+    
+    WHILE(($j >= 0) and ($break = 0))
+        
+        $pos = 0
+        $pos = STRPOS ($latestarr[$j], $bossarr[$i], 1, 1)
+        
+        IF($pos ! 0)
+            
+            IF(STRPOS ($latestarr[$j], STRCONCAT("[Client thread/INFO]: [CHAT] ", $bossarr[$i]), 1, 1) ! 0)
+                
+                $time = STRCUT ($latestarr[$j], 2, 8)
+                STRSEPARATE ($time, ":", $timearr)
+                
+                $remain = INT($cooldownarr[$i]) - (($_time_h - INT($timearr[0]))  * 60 + $_time_m - INT($timearr[1]))
+                
+                PRINT($bossconvarr[$i], " был повержен в ", $timearr[0], ":", $timearr[1], " заспавнится через ", $remain, " min")
+                $break = 1
+                
+            END_IF
+            
+        END_IF
+        
+        $j = $j - 1
+        
+    END_CYC
+    
+END_CYC
+
+WHILE(1)
+
+WAIT(60)
+END_CYC
+
+HALT()
