@@ -1,85 +1,32 @@
 ﻿#name "BossNotify"
 
-LOGCLEAR ()
-LOGSHOW (1)
-WNDSIZE (WNDFIND ("Лог", 1) , 650, 450)
+SUB(soundp)
+    // Не знаю нахуя, но в ебучем кликере звук просто так не производится, если перед ним не поставить задержку
+    WAITMS(500)
+    SOUND ($sound)
+    $alrdnotify[$i] = $alrdnotify[$i] + 1
+END_SUB
 
-//kor 3a 5 min 
-//slaim 3a 5 
-//matka 3a 5 
-//korova 20 
-//yeti 3a 5 
-//levik 3a 20 
-//riba gast po 20 toj
-
-PRINT("Script started")
-
-IF(FEXISTS ("config.ini"))
-    PRINT("Import config file...")
-ELSE
-    PRINTC("Config file not found", COLORGEN (255, 0, 0))
-    HALT()
-END_IF
-
-$latestpath = INIREAD("config.ini", "lastestpath")
-$bosses = INIREAD("config.ini", "bosses")
-$cooldowns = INIREAD("config.ini", "cooldowns")
-$needcdnotify = "5,5,5,20,5,20,20,20"
-
-IF(FEXISTS ($latestpath))
-    PRINT("Import successful")
-ELSE
-    PRINTC("Import failed", COLORGEN (255, 0, 0))
-    PRINT($latestpath, " not found")
-    HALT()
-END_IF
-
-$bossesconv = $bosses
-
-TFREADARR ("UTF-8", $utf)
-TFREADARR ("Windows-1251", $win)
-
-FOR($i = 0, $i < ARRSIZE($utf))
-    $pos = -1
+SUB(cprint, $col, $print)
+    // Если цвета выключены, то будет ноль, даже если программа скажет использовать цвета
+    $switch = $usecolor * $col
+    $switch = $switch * 2 + $print
     
-    WHILE($pos ! 0)
-        
-        $bossesconv = STRREPLACE($bossesconv, $utf[$i], $win[$i])
-        $pos = STRPOS ($bossesconv, $utf[$i], 1, 1) 
-        
-    END_CYC
-    
-END_CYC
+    SWITCH ($switch)
+        CASE (1)
+            PRINT($bossconvarr[$i], " был повержен в ", $timearr[0], ":", $timearr[1], " заспавнится через ", $remain, " мин.")
+        CASE (2)
+            PRINT($bossconvarr[$i], " был повержен в ", $timearr[0], ":", $timearr[1], " его кд спавна прошло.")
+            PRINT("Заспавнился ", abs($remain), " мин. назад")
+        CASE (3)
+            PRINTC(STRCONCAT($bossconvarr[$i], " был повержен в ", $timearr[0], ":", $timearr[1], " заспавнится через ", $remain, " мин."), $color)
+        CASE (4)
+            PRINTC(STRCONCAT($bossconvarr[$i], " был повержен в ", $timearr[0], ":", $timearr[1], " его кд спавна прошло."), $color)
+            PRINTC(STRCONCAT("Заспавнился ", abs($remain), " мин. назад"), $color)
+    END_SWITCH
+END_SUB
 
-STRSEPARATE ($bosses, ",", $bossarr)
-STRSEPARATE ($bossesconv, ",", $bossconvarr)
-STRSEPARATE ($cooldowns, ",", $cooldownarr)
-STRSEPARATE ($needcdnotify, ",", $needcdnarr)
-
-IF(ARRSIZE($bossarr) > ARRSIZE($cooldownarr))
-    PRINTC("Boss name's more than cooldown's", COLORGEN (255, 0, 0))
-    HALT()
-ELSE
-    IF(ARRSIZE($bossarr) < ARRSIZE($cooldownarr))
-        PRINTC("Cooldown's more than boss name's", COLORGEN (255, 0, 0))
-        HALT()
-    END_IF
-END_IF
-
-FOR($i = 0, $i < ARRSIZE($bossarr))
-    PRINT($bossconvarr[$i], " - ", $cooldownarr[$i], " min")
-END_CYC
-
-$latestcount = TFCOUNT ($latestpath)
-TFREADARR ($latestpath, $latestarr)
-PRINT("Current in file latest.log lines ", $latestcount)
-PRINT()
-
-FOR($i = 0, $i < ARRSIZE($bossarr))
-    
-    $j = $latestcount - 1
-    $break = 0
-    
+SUB (search)
     WHILE(($j >= 0) and ($break = 0))
         
         $pos = 0
@@ -94,7 +41,28 @@ FOR($i = 0, $i < ARRSIZE($bossarr))
                 
                 $remain = INT($cooldownarr[$i]) - (($_time_h - INT($timearr[0]))  * 60 + $_time_m - INT($timearr[1]))
                 
-                PRINT($bossconvarr[$i], " был повержен в ", $timearr[0], ":", $timearr[1], " заспавнится через ", $remain, " min")
+                IF($remain > $needcdnarr[$i])
+                    cprint(0,1)
+                    $alrdnotify[$i] = 0
+                ELSE
+                    IF($remain > 0)
+                        IF($alrdnotify[$i] = 0)
+                            cprint(1,1)
+                            soundp()
+                        ELSE
+                            cprint(0,1)
+                        END_IF
+                    ELSE
+                        IF($alrdnotify[$i] = 1)
+                            cprint(1,2)
+                            soundp()
+                        ELSE
+                            cprint(0,2)
+                        END_IF
+                    END_IF
+                    
+                END_IF
+                
                 $break = 1
                 
             END_IF
@@ -104,12 +72,125 @@ FOR($i = 0, $i < ARRSIZE($bossarr))
         $j = $j - 1
         
     END_CYC
+END_SUB
+
+//=============================================
+// Очистка лога, и включения окна вывода лога
+LOGCLEAR ()
+LOGSHOW (1)
+WNDSIZE (WNDFIND ("Лог", 1) , 650, 450)
+
+PRINT("Script started")
+
+// Проверка присутствия файла настроек
+IF(FEXISTS ("config.ini"))
+    PRINT("Import config file...")
+ELSE
+    PRINTC("Config file not found", COLORGEN (255, 0, 0))
+    HALT()
+END_IF
+
+// Считывание файла настроек
+$latestpath = INIREAD("config.ini", "lastestpath")
+$bosses = INIREAD("config.ini", "bosses")
+$cooldowns = INIREAD("config.ini", "cooldowns")
+$needcdnotify = INIREAD("config.ini", "needcdnotify")
+$sound = STRCONCAT("sounds\", INIREAD("config.ini", "sound"))
+$usecolor = INIREAD("config.ini", "usecolors")
+
+IF($usecolor = 1)
+    STRSEPARATE (INIREAD("config.ini", "color"), ",", $colors)
+    $color = COLORGEN ($colors[0], $colors[1], $colors[2])
+END_IF
+
+// Проверка наличия файла latest.log по указаному пути
+IF(FEXISTS ($latestpath))
+    PRINT("Import successful")
+ELSE
+    PRINTC("Import failed", COLORGEN (255, 0, 0))
+    PRINT($latestpath, " not found")
+    HALT()
+END_IF
+
+// Дополнительная строка с именами боссов из-за разных кодировок
+$bossesconv = $bosses
+
+// Считывание файлов разных кодировок
+TFREADARR ("UTF-8", $utf)
+TFREADARR ("Windows-1251", $win)
+
+// Конвертирование строки боссов в другую кодировку для читаемости информации в логе
+FOR($i = 0, $i < ARRSIZE($utf))
+    $pos = -1
+    
+    WHILE($pos ! 0)
+        
+        $bossesconv = STRREPLACE($bossesconv, $utf[$i], $win[$i])
+        $pos = STRPOS ($bossesconv, $utf[$i], 1, 1)
+        
+    END_CYC
+END_CYC
+
+// Разделение строк на массивы
+STRSEPARATE ($bosses, ",", $bossarr)
+STRSEPARATE ($bossesconv, ",", $bossconvarr)
+STRSEPARATE ($cooldowns, ",", $cooldownarr)
+STRSEPARATE ($needcdnotify, ",", $needcdnarr)
+
+// Проверка на равность размеров массивов с именами боссов и их кд
+IF(ARRSIZE($bossarr) > ARRSIZE($cooldownarr))
+    PRINTC("Boss name's more than cooldown's", COLORGEN (255, 0, 0))
+    HALT()
+ELSE
+    IF(ARRSIZE($bossarr) < ARRSIZE($cooldownarr))
+        PRINTC("Cooldown's more than boss name's", COLORGEN (255, 0, 0))
+        HALT()
+    END_IF
+END_IF
+
+//Вывод в лог записанных боссов и их кд
+FOR($i = 0, $i < ARRSIZE($bossarr))
+    PRINT($bossconvarr[$i], " - ", $cooldownarr[$i], " min", " - ", $needcdnarr[$i])
+END_CYC
+
+$latestcount = TFCOUNT ($latestpath)
+TFREADARR ($latestpath, $latestarr)
+PRINT("Current in file latest.log lines ", $latestcount)
+PRINT()
+
+//=============================================
+// Проверка в начале игры
+FOR($i = 0, $i < ARRSIZE($bossarr))
+    
+    $j = $latestcount - 1
+    $break = 0
+    $alrdnotify[$i] = 0
+    
+    search()
     
 END_CYC
 
-WHILE(1)
-
 WAIT(60)
+
+//=============================================
+// Постоянно работающий цикл
+WHILE(1)
+    PRINT()
+    
+    $latestcount = TFCOUNT ($latestpath)
+    // Согласен, что не оптимизированно, но мне лень
+    TFREADARR ($latestpath, $latestarr)
+    
+    FOR($i = 0, $i < ARRSIZE($bossarr))
+        
+        $j = $latestcount - 1
+        $break = 0
+        
+        search()
+        
+    END_CYC
+    
+    WAIT(59)
 END_CYC
 
 HALT()
